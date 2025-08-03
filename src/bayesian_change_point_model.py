@@ -3,6 +3,8 @@ import pandas as pd
 import pymc as pm
 import arviz as az
 import pickle
+import joblib
+import os
 
 class BayesianChangePointModel:
     def __init__(self):
@@ -36,10 +38,11 @@ class BayesianChangePointModel:
             raise RuntimeError("Model not initialized. Run create_model() first.")
         with self.model:
             self.trace = pm.sample(samples, tune=tune, target_accept=0.95, return_inferencedata=True)
-
             self.results["summary"] = az.summary(self.trace)
             self.tau = int(self.trace.posterior["tau"].mean().values)
-
+            
+        
+        
     def predict(self):
         if self.trace is None:
             raise RuntimeError("Model not yet fit. Run fit() first.")
@@ -52,19 +55,54 @@ class BayesianChangePointModel:
         convergence = all(rhat < 1.1)
         return {"converged": convergence, "r_hat": rhat}
 
-    def save(self, filepath="bcp_model.pkl"):
-        with open(filepath, "wb") as f:
-            pickle.dump({
-                "trace": self.trace,
-                "model": self.model,
-                "tau": self.tau,
-                "results": self.results
-            }, f)
+    def save(self, file_prefix, custom_params=None):
+        """
+        Saves the trace and custom params to files with the given file_prefix.
 
-    def load(self, filepath="bcp_model.pkl"):
-        with open(filepath, "rb") as f:
-            saved = pickle.load(f)
-            self.trace = saved["trace"]
-            self.model = saved["model"]
-            self.tau = saved["tau"]
-            self.results = saved["results"]
+        Parameters
+        ----------
+        file_prefix : str
+            path and prefix used to identify where to save the trace for this model,
+            e.g. given file_prefix = 'path/to/file/'
+            This will attempt to save to 'path/to/file/trace.pickle'.
+
+        custom_params : dict (defaults to None)
+            Custom parameters to save
+        """
+        fileObject = open(os.path.join(file_prefix,'trace.pickle'), 'wb')
+        joblib.dump(self.trace, fileObject)
+        fileObject.close()
+
+        if custom_params:
+            fileObject = open(os.path.join(file_prefix,'params.pickle'), 'wb')
+            joblib.dump(custom_params, fileObject)
+            fileObject.close()
+
+    def load(self, file_prefix, load_custom_params=False):
+        """
+        Loads a saved version of the trace, and custom param files with the given file_prefix.
+
+        Parameters
+        ----------
+        file_prefix : str
+            path and prefix used to identify where to load the saved trace for this model,
+            e.g. given file_prefix = 'path/to/file/'
+            This will attempt to load 'path/to/file/trace.pickle'.
+
+        load_custom_params : bool (defaults to False)
+            flag to indicate whether custom parameters should be loaded
+
+        Returns
+        ----------
+        custom_params : Dictionary of custom parameters
+        """
+        self.trace = joblib.load(os.path.join(file_prefix,'trace.pickle'))
+
+        custom_params = None
+        if load_custom_params:
+            self.trace = joblib.load(os.path.join(file_prefix,'params.pickle'))
+
+        self.results["summary"] = az.summary(self.trace)
+        self.tau = int(self.trace.posterior["tau"].mean().values)
+
+        return self.trace
