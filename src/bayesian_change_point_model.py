@@ -14,6 +14,26 @@ class BayesianChangePointModel:
         self.tau = None
 
     def create_model(self, data):
+        """
+        Constructs a Bayesian change point model for the given time series data using PyMC.
+        This method initializes a probabilistic model that assumes a single change point (tau) in the data,
+        where the mean (mu) and standard deviation (sigma) of the data may change. The model uses two normal
+        distributions (before and after the change point) with separate means and standard deviations, and
+        infers the most likely location of the change point.
+        Parameters
+        ----------
+        data : pandas.Series or array-like
+            The time series data to model. Missing values are dropped before modeling.
+        Attributes Set
+        --------------
+        self.data : numpy.ndarray
+            The cleaned data used for modeling.
+        self.N : int
+            The length of the cleaned data.
+        self.model : pm.Model
+            The constructed PyMC model instance.
+        """
+        
         self.data = np.array(data.dropna())
         self.N = len(self.data)
 
@@ -34,6 +54,20 @@ class BayesianChangePointModel:
             self.model = model
 
     def fit(self, samples=2000, tune=1000):
+        """
+        Fit the Bayesian change point model using MCMC sampling.
+        Parameters:
+            samples (int, optional): Number of posterior samples to draw. Defaults to 2000.
+            tune (int, optional): Number of tuning (burn-in) steps. Defaults to 1000.
+        Raises:
+            RuntimeError: If the model has not been initialized (i.e., `create_model()` has not been called).
+        Side Effects:
+            - Runs MCMC sampling on the model.
+            - Stores the trace in `self.trace`.
+            - Stores the summary statistics in `self.results["summary"]`.
+            - Sets `self.tau` to the mean of the posterior samples for the change point parameter `tau`.
+        """
+
         if self.model is None:
             raise RuntimeError("Model not initialized. Run create_model() first.")
         with self.model:
@@ -44,11 +78,35 @@ class BayesianChangePointModel:
         
         
     def predict(self):
+        """
+        Generate predictions using the fitted Bayesian change point model.
+        Returns
+        -------
+        tuple
+            A tuple containing:
+                - tau: The estimated change point(s) from the model.
+                - posterior: The posterior samples from the fitted model.
+        Raises
+        ------
+        RuntimeError
+            If the model has not been fit yet (i.e., `fit()` has not been called).
+        """
+
         if self.trace is None:
             raise RuntimeError("Model not yet fit. Run fit() first.")
         return self.tau, self.trace.posterior
 
     def score(self):
+        """
+        Evaluates the convergence of the fitted Bayesian model using the R-hat diagnostic.
+        Returns:
+            dict: A dictionary containing:
+                - "converged" (bool): True if all R-hat values are below 1.1, indicating convergence.
+                - "r_hat" (array-like): The R-hat values for the model parameters.
+        Raises:
+            RuntimeError: If the model has not been fit and no trace is available.
+        """
+        
         if self.trace is None:
             raise RuntimeError("Model not yet fit. Run fit() first.")
         rhat = self.results["summary"]["r_hat"]
