@@ -9,8 +9,6 @@ __pycache__/
 # Data files
 data/
 models/
-brent-oil-dashboard2/
-brent-oil-dashboard/
 
 # Distribution / packaging
 .Python
